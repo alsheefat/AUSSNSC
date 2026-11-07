@@ -1,0 +1,14 @@
+.gradle/
+build/
+local.properties
+.idea/
+*.iml
+android/app/google-services.json
+backend/.env
+backend/*.db
+backend/*.db-*
+backend/uploads/
+__pycache__/
+.venv/
+.pytest_cache/
+*.apk

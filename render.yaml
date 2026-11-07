@@ -1,0 +1,42 @@
+# Render Blueprint: one click creates the API server + PostgreSQL database.
+databases:
+  - name: aussnsc-db
+    plan: free
+    databaseName: aussnsc
+    user: aussnsc
+
+services:
+  - type: web
+    name: aussnsc-api
+    runtime: python
+    rootDir: backend
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.3
+      - key: ENV
+        value: production
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: aussnsc-db
+          property: connectionString
+      - key: TRUST_PROXY
+        value: "1"
+      - key: SEED_DEMO
+        value: "0"
+      - key: ENABLE_DOCS
+        value: "1"
+      - key: ADMIN_NAME
+        value: School Admin
+      - key: ADMIN_PHONE          # your admin login, e.g. 017xxxxxxxx
+        sync: false
+      - key: ADMIN_PASSWORD       # choose a strong password
+        sync: false
+      - key: FIREBASE_PROJECT_ID  # Firebase console > Project settings > Project ID
+        sync: false

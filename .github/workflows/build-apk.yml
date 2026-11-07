@@ -1,0 +1,61 @@
+name: Build APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - 'android/**'
+      - '.github/workflows/build-apk.yml'
+
+permissions:
+  contents: write   # lets the job publish the APK as a release you can download on your phone
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+
+      - name: Add Firebase config (google-services.json)
+        env:
+          GSJ: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ -n "$GSJ" ]; then
+            echo "$GSJ" | base64 -d > app/google-services.json
+            echo "Firebase config added - Google sign-in will be included."
+          else
+            echo "::warning::Secret GOOGLE_SERVICES_JSON is not set - building WITHOUT Google sign-in (email/phone login still works)."
+          fi
+
+      - name: Build debug APK
+        run: gradle assembleDebug --no-daemon --stacktrace
+
+      - name: Upload APK as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AUSSNSC-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Publish APK as release "apk-latest"
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk ../AUSSNSC.apk
+          cd ..
+          gh release delete apk-latest --yes --cleanup-tag 2>/dev/null || true
+          gh release create apk-latest AUSSNSC.apk --title "AUSSNSC app (latest build)" \
+            --notes "Built from commit ${GITHUB_SHA::7}. Download AUSSNSC.apk and install it."
