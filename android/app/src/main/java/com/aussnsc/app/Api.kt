@@ -70,7 +70,7 @@ object Session {
         prefs?.edit()?.putString("user", u.toString())?.apply()
     }
 
-    fun setTheme(value: String) {
+    fun applyTheme(value: String) {
         theme = value
         prefs?.edit()?.putString("theme", value)?.apply()
     }

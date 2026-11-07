@@ -394,7 +394,7 @@ fun SettingsScreen(nav: NavHostController) {
             Text("Appearance", fontWeight = FontWeight.SemiBold)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf("light" to "Light", "dark" to "Dark", "system" to "System").forEach { (v, label) ->
-                    FilterChip(selected = Session.theme == v, onClick = { Session.setTheme(v); save("theme", v) }, label = { Text(label) })
+                    FilterChip(selected = Session.theme == v, onClick = { Session.applyTheme(v); save("theme", v) }, label = { Text(label) })
                 }
             }
             Text("Language", fontWeight = FontWeight.SemiBold)
