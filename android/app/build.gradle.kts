@@ -15,6 +15,14 @@ val apiBaseUrl: String = (project.findProperty("API_BASE_URL") as String?)
     ?: "https://aussnsc-api.onrender.com/api/v1/"
 
 android {
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+
     namespace = "com.aussnsc.app"
     compileSdk = 35
     defaultConfig {
