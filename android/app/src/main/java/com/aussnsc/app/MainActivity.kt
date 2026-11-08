@@ -282,11 +282,26 @@ fun HomeScreen(nav: NavHostController) {
                 }
             }
             item {
-                Card(colors = CardDefaults.cardColors(containerColor = Blue), shape = RoundedCornerShape(20.dp), modifier = Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(18.dp)) {
-                        Text("AUSSNSC DIGITAL CAMPUS", color = Color.White.copy(alpha = .8f), fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        Text("Everything you need for school.", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                        Text("Notices · Academics · Community", color = Color.White.copy(alpha = .85f))
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF123B70)),
+                    shape = RoundedCornerShape(26.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
+                ) {
+                    Box(Modifier.fillMaxWidth().background(Color(0xFF123B70)).padding(20.dp)) {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("AUSSNSC  /  DIGITAL CAMPUS", color = Color(0xFFB9D9F7), fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.1.sp)
+                            Text("Your school,\nconnected.", color = Color.White, fontSize = 27.sp, lineHeight = 31.sp, fontWeight = FontWeight.Bold)
+                            Text("Learning · Updates · Community", color = Color.White.copy(alpha = .82f), fontSize = 13.sp)
+                            Spacer(Modifier.height(2.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                listOf("Academics", "Notices", "Community").forEach { label ->
+                                    Surface(color = Color.White.copy(alpha = .13f), shape = RoundedCornerShape(50)) {
+                                        Text(label, color = Color.White, fontSize = 11.sp, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }

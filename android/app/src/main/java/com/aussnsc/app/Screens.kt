@@ -15,6 +15,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -429,7 +430,6 @@ fun AuthScreen(nav: NavHostController, register: Boolean) {
 @Composable
 fun ResultScreen(nav: NavHostController) {
     val scope = rememberCoroutineScope()
-    var byRoll by remember { mutableStateOf(true) }
     var value by remember { mutableStateOf("") }
     var className by remember { mutableStateOf("") }
     var results by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
@@ -438,60 +438,78 @@ fun ResultScreen(nav: NavHostController) {
     var error by remember { mutableStateOf<String?>(null) }
 
     Scaffold(topBar = { Header("Result Search", "Academics") { nav.popBackStack() } }, containerColor = MaterialTheme.colorScheme.background) { p ->
-        LazyColumn(Modifier.fillMaxSize().padding(p).padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        LazyColumn(Modifier.fillMaxSize().padding(p).padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             item {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("Find a published examination result.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilterChip(selected = byRoll, onClick = { byRoll = true }, label = { Text("By roll") })
-                        FilterChip(selected = !byRoll, onClick = { byRoll = false }, label = { Text("By name") })
-                    }
-                    OutlinedTextField(
-                        value, { value = it }, Modifier.fillMaxWidth(), singleLine = true,
-                        label = { Text(if (byRoll) "Roll number" else "Student name (3+ letters)") },
-                        keyboardOptions = KeyboardOptions(keyboardType = if (byRoll) KeyboardType.Number else KeyboardType.Text),
-                    )
-                    if (byRoll) OutlinedTextField(className, { className = it }, Modifier.fillMaxWidth(), singleLine = true, label = { Text("Class (e.g. 10) - recommended") })
-                    val err = error
-                    if (err != null) Text(err, color = MaterialTheme.colorScheme.error)
-                    Button(
-                        enabled = !busy, modifier = Modifier.fillMaxWidth(),
-                        onClick = {
-                            val v = value.trim()
-                            if (byRoll && v.toIntOrNull() == null) {
-                                error = "Enter a valid roll number."
-                            } else if (!byRoll && v.length < 3) {
-                                error = "Enter at least 3 letters of the name."
-                            } else {
-                                scope.launch {
-                                    busy = true
-                                    error = null
-                                    try {
-                                        val path = if (byRoll) "/results/search?roll=$v" + (if (className.isBlank()) "" else "&class_name=" + enc(className.trim()))
-                                        else "/results/search?name=" + enc(v)
-                                        results = Api.arr(path, false).objects()
-                                        searched = true
-                                    } catch (e: ApiException) {
-                                        error = e.message
-                                    } catch (e: Exception) {
-                                        error = "Could not search right now."
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(24.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                ) {
+                    Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text("Find a result", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Navy)
+                        Text("Search using a student's name or roll number.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        OutlinedTextField(
+                            value = value,
+                            onValueChange = { value = it; error = null },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            label = { Text("Student name or roll number") },
+                            placeholder = { Text("e.g. 125 or Ayesha Rahman") },
+                            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                        )
+                        OutlinedTextField(
+                            value = className,
+                            onValueChange = { className = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            label = { Text("Class (optional; useful for roll search)") },
+                        )
+                        error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                        Button(
+                            enabled = !busy,
+                            modifier = Modifier.fillMaxWidth().height(50.dp),
+                            onClick = {
+                                val v = value.trim()
+                                val isRoll = v.isNotEmpty() && v.all { it.isDigit() }
+                                if (v.isBlank()) {
+                                    error = "Enter a student name or roll number."
+                                } else if (!isRoll && v.length < 3) {
+                                    error = "Enter at least 3 letters for a name search."
+                                } else {
+                                    scope.launch {
+                                        busy = true
+                                        error = null
+                                        try {
+                                            val path = if (isRoll) "/results/search?roll=$v" + (if (className.isBlank()) "" else "&class_name=" + enc(className.trim()))
+                                                else "/results/search?name=" + enc(v)
+                                            results = Api.arr(path, false).objects()
+                                            searched = true
+                                        } catch (e: ApiException) {
+                                            error = e.message
+                                        } catch (e: Exception) {
+                                            error = "Could not search right now."
+                                        }
+                                        busy = false
                                     }
-                                    busy = false
                                 }
-                            }
-                        },
-                    ) { Text(if (busy) "Searching..." else "Search result") }
+                            },
+                        ) {
+                            if (busy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
+                            else Text("Search results")
+                        }
+                    }
                 }
             }
             if (searched && results.isEmpty()) item { Text("No published result matched. Check the details or try again later.") }
             items(results) { r ->
-                Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
+                Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp)) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(r.str("student_name"), fontWeight = FontWeight.Bold, fontSize = 17.sp)
                         Text("Class ${r.str("class_name")} ${r.str("section")} · Roll ${r.optInt("roll")}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Text("${r.str("exam")} ${r.optInt("exam_year")}", fontWeight = FontWeight.SemiBold)
                         Text("GPA ${r.str("gpa", "-")} · Grade ${r.str("grade", "-")} · ${cap(r.str("status"))}", color = Blue, fontWeight = FontWeight.Bold)
-                        r.list("subjects").forEach { s -> Text("${s.str("subject")}: ${s.str("marks", "-")} ${s.str("grade")}", fontSize = 13.sp) }
+                        r.list("subjects").forEach { subject -> Text("${subject.str("subject")}: ${subject.str("marks", "-")} ${subject.str("grade")}", fontSize = 13.sp) }
                     }
                 }
             }
