@@ -8,7 +8,7 @@ cd "$(dirname "$0")"
 
 if [ "$1" != "--download-only" ]; then
   if [ -n "$1" ]; then
-    sed -i "s|^API_BASE_URL=.*|API_BASE_URL=${1%/}/api/v1/|" android/gradle.properties
+    echo "API_BASE_URL=${1%/}/api/v1/" > android/api.properties
   fi
   GS=android/app/google-services.json
   [ -f "$GS" ] || { [ -f "$HOME/storage/downloads/google-services.json" ] && cp "$HOME/storage/downloads/google-services.json" "$GS"; } || true

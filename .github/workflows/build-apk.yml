@@ -40,21 +40,21 @@ jobs:
             echo "::warning::Secret GOOGLE_SERVICES_JSON is not set - building WITHOUT Google sign-in (email/phone login still works)."
           fi
 
-      - name: Build debug APK
-        run: gradle assembleDebug --no-daemon --stacktrace
+      - name: Build APK (release build, signed with the fixed key)
+        run: gradle assembleRelease --no-daemon --stacktrace
 
       - name: Upload APK as workflow artifact
         uses: actions/upload-artifact@v4
         with:
           name: AUSSNSC-APK
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          path: android/app/build/outputs/apk/release/app-release.apk
 
       - name: Publish APK as release "apk-latest"
         if: github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cp app/build/outputs/apk/debug/app-debug.apk ../AUSSNSC.apk
+          cp app/build/outputs/apk/release/app-release.apk ../AUSSNSC.apk
           cd ..
           gh release delete apk-latest --yes --cleanup-tag 2>/dev/null || true
           gh release create apk-latest AUSSNSC.apk --title "AUSSNSC app (latest build)" \

@@ -1,5 +1,21 @@
 # AUSSNSC — app + server (one repository)
 
+## What's new in tar3 (Android 7 and older phones)
+- Works on **Android 6.0+** (minSdk 23), including **Android 7.0 / 7.1**.
+- **HTTPS fix for old phones:** Android 7.0 doesn't trust the newer public root certificates (Let's Encrypt ISRG X1/X2, Google Trust Services),
+  so connecting to a modern server fails there. The app now adds those roots to the phone's own list, for the API **and** for gallery pictures.
+- **Launcher icon** now ships as PNGs (all densities) plus an adaptive icon for Android 8+, so it shows correctly on Android 7.
+- The second patch you uploaded is byte-identical to the first one, which was already merged in tar2 — nothing new to merge.
+
+## What was new in tar2
+- **Your UI phase-1 patch is merged**: new home hero card and the single "name or roll number" result search.
+- **Compile error fixed**: `Session.setTheme` clashed with the property's generated setter (JVM signature clash) → renamed `applyTheme` (the patch already expected this).
+- **Safer navigation**: signing in / out now clears the whole back stack (no more "back" into a stale login screen).
+- **Polish**: per-tile icons, full light/dark colour schemes (chat bubbles, chips, dialogs readable in dark mode), status-bar icon colours, edge-to-edge screens, gradient welcome screen, app icon, Bengali digits accepted in result search (১২৫ → 125), lists stay on screen while refreshing.
+- **Faster/cheaper**: the APK is now a *release* build (much smoother than debug); chat only polls while the screen is visible; the server computes channel access once per request (was one query per channel), uses gzip, recycles idle DB connections and has a message-pagination index.
+- **Server address** now lives in `android/api.properties` (written by `termux-build.sh`) so re-extracting a new tar never resets it.
+- **New server option** `RESET_ADMIN=1` to recover a lost admin password.
+
 ```
 android/   Kotlin / Jetpack Compose app  -> built into an APK by GitHub Actions
 backend/   FastAPI server + database     -> runs on Render
@@ -34,7 +50,7 @@ then issues its own login for the school (roles, classes, results, chat all live
 ```bash
 pkg install tar -y
 termux-setup-storage                       # allow storage access (once)
-cd ~ && tar xzf ~/storage/downloads/AUSSNSC.tar.gz
+cd ~ && tar xzf ~/storage/downloads/tar3.tar.gz
 cd AUSSNSC
 cp ~/storage/downloads/google-services.json android/app/   # the Firebase file from step 1
 bash termux-setup.sh
@@ -66,6 +82,16 @@ The APK downloads to *Downloads/AUSSNSC.apk* (Termux offers to open it; allow �
 repo's **Releases → apk-latest** page in the GitHub app.
 
 ---
+
+## Already installed an earlier tar? Update in place
+
+```bash
+cd ~/AUSSNSC
+tar xzf ~/storage/downloads/tar3.tar.gz --strip-components=1   # overwrites code; keeps your .git, google-services.json and api.properties
+bash termux-build.sh        # commit + push + build + download the new APK
+```
+Render redeploys the server by itself when the push reaches GitHub. (Your server address is kept in `android/api.properties`;
+if you've never run `termux-build.sh https://YOUR-URL` with the new scripts, run it once that way.)
 
 ## First use as admin
 
@@ -101,7 +127,7 @@ repo's **Releases → apk-latest** page in the GitHub app.
 - **Push notifications** are not wired in the app yet (the server side is ready).
 - **Language:** the English/বাংলা choice is saved on the account, but the app text itself is English only for now.
 - Chat refreshes every 4 seconds (the server also has a WebSocket for real-time when you want it).
-- Debug-signed APK = fine for installing on phones directly, not for Google Play. For Play you need a private release key.
+- The APK is a release build signed with the fixed key in `android/app/debug.keystore` — fine for installing directly on phones, not for Google Play. For Play you need your own private release key.
 - Teachers can't attach files to assignments, and students can't attach files to submissions, in this version (text only).
 - Name-based public result search is on by design (limited and rate-limited). Think about student privacy before using real data.
 
@@ -113,5 +139,5 @@ repo's **Releases → apk-latest** page in the GitHub app.
 | Google button says “isn't set up in this build” | The `GOOGLE_SERVICES_JSON` secret was missing. Put the file in `android/app/` and run `bash termux-build.sh`. |
 | Google sign-in error 10 / “developer error” | SHA-1 not added in Firebase (step 1.3), or you didn't re-download `google-services.json` after adding it. |
 | “Google sign-in could not be verified” | `FIREBASE_PROJECT_ID` on Render must equal the Firebase Project ID exactly. |
-| Build fails | Open GitHub → your repo → Actions → the red run → copy the error text. |
+| Build fails | Open GitHub → your repo → Actions → the red run → copy the error text. (To test faster, change `assembleRelease` to `assembleDebug` in `.github/workflows/build-apk.yml` and the two `apk/release/app-release.apk` paths to `apk/debug/app-debug.apk`.) |
 | Forgot admin password | Render → your service → Environment: set `ADMIN_PASSWORD` to a new value and add `RESET_ADMIN` = `1`, save (it redeploys), sign in, then **delete `RESET_ADMIN`**. |

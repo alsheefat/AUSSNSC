@@ -214,7 +214,7 @@ def list_assignments(class_id: int | None = None, student_id: int | None = Query
     else:
         allowed = visible_class_ids(db, user)
         if allowed is not None:
-            stmt = stmt.where(Assignment.class_id.in_(allowed or {-1}))
+            stmt = stmt.where(Assignment.class_id.in_(list(allowed) or [-1]))
         if user.role == "student":
             sid = _own_student(db, user).id
     if class_id:
@@ -331,7 +331,7 @@ def materials(class_id: int | None = None, kind: str | None = None,
     stmt = select(Material)
     allowed = visible_class_ids(db, user)
     if allowed is not None:  # school-wide (class_id NULL) + own classes
-        stmt = stmt.where((Material.class_id.is_(None)) | (Material.class_id.in_(allowed or {-1})))
+        stmt = stmt.where((Material.class_id.is_(None)) | (Material.class_id.in_(list(allowed) or [-1])))
     if class_id:
         stmt = stmt.where(Material.class_id == class_id)
     if kind:

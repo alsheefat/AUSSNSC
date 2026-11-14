@@ -2,9 +2,11 @@
 
 package com.aussnsc.app
 
+import android.app.Activity
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -21,7 +23,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -29,15 +34,23 @@ import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.core.view.WindowCompat
 import androidx.navigation.navArgument
+import coil.Coil
+import coil.ImageLoader
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
         Session.init(applicationContext)
+        Api.init(applicationContext)
+        // pictures use the same HTTPS settings as the API (needed on Android 7)
+        Coil.setImageLoader(ImageLoader.Builder(applicationContext).okHttpClient(Api.httpClient).crossfade(true).build())
         setContent { AUSSNSCApp() }
     }
 }
@@ -50,8 +63,42 @@ fun AUSSNSCApp() {
         "light" -> false
         else -> isSystemInDarkTheme()
     }
-    val scheme = if (dark) darkColorScheme(primary = Color(0xFF8AB4F8), background = Color(0xFF101820), surface = Color(0xFF182431))
-    else lightColorScheme(primary = Blue, background = Canvas, surface = Color.White)
+    val scheme = if (dark) darkColorScheme(
+        primary = Color(0xFF8AB4F8), onPrimary = Color(0xFF0B1B2B),
+        primaryContainer = Color(0xFF1F3A5F), onPrimaryContainer = Color(0xFFD7E6FA),
+        secondaryContainer = Color(0xFF24405F), onSecondaryContainer = Color(0xFFDCE8F7),
+        background = Color(0xFF101820), onBackground = Color(0xFFE6EDF5),
+        surface = Color(0xFF182431), onSurface = Color(0xFFE6EDF5),
+        surfaceVariant = Color(0xFF223244), onSurfaceVariant = Color(0xFFB7C4D2),
+        outline = Color(0xFF6F8196),
+        surfaceContainer = Color(0xFF182431), surfaceContainerHigh = Color(0xFF1E2C3C),
+        surfaceContainerHighest = Color(0xFF223244), surfaceContainerLow = Color(0xFF141F2B),
+        surfaceContainerLowest = Color(0xFF0D141C),
+    ) else lightColorScheme(
+        primary = Blue, onPrimary = Color.White,
+        primaryContainer = Color(0xFFD7E6FA), onPrimaryContainer = Navy,
+        secondaryContainer = Color(0xFFDCE8F7), onSecondaryContainer = Navy,
+        background = Canvas, onBackground = Color(0xFF0F1B2A),
+        surface = Color.White, onSurface = Color(0xFF0F1B2A),
+        surfaceVariant = Color(0xFFE6ECF3), onSurfaceVariant = Color(0xFF53606E),
+        outline = Color(0xFF8793A1),
+        surfaceContainer = Color.White, surfaceContainerHigh = Color(0xFFF1F5FA),
+        surfaceContainerHighest = Color(0xFFE9EEF5), surfaceContainerLow = Color(0xFFF7F9FC),
+        surfaceContainerLowest = Color.White,
+    )
+
+    // status-bar icons: dark on light screens, light on dark screens and on the blue welcome page
+    val backStack by nav.currentBackStackEntryAsState()
+    val route = backStack?.destination?.route
+    val view = LocalView.current
+    SideEffect {
+        val window = (view.context as? Activity)?.window
+        if (window != null) {
+            val controller = WindowCompat.getInsetsController(window, view)
+            controller.isAppearanceLightStatusBars = !dark && route != "welcome"
+            controller.isAppearanceLightNavigationBars = !dark
+        }
+    }
 
     // refresh the stored profile once on start (role may have changed since last login)
     LaunchedEffect(Unit) {
@@ -102,9 +149,9 @@ fun AUSSNSCApp() {
                 MenuPage(
                     nav, "My Child", "Parent",
                     listOf(
-                        Tile("Attendance", "Attendance record", "list/attendance?arg=$sid"),
-                        Tile("Results", "Published results", "list/results_my?arg=$sid"),
-                        Tile("Assignments", "Homework for their class", "list/assignments?arg=$sid"),
+                        Tile("Attendance", "Attendance record", "list/attendance?arg=$sid", Icons.Default.Check),
+                        Tile("Results", "Published results", "list/results_my?arg=$sid", Icons.Default.Star),
+                        Tile("Assignments", "Homework for their class", "list/assignments?arg=$sid", Icons.Default.Edit),
                     ),
                 )
             }
@@ -117,7 +164,9 @@ fun AUSSNSCApp() {
 @Composable
 fun WelcomeScreen(nav: NavHostController) {
     Column(
-        Modifier.fillMaxSize().background(Blue).statusBarsPadding().navigationBarsPadding().padding(24.dp),
+        Modifier.fillMaxSize()
+            .background(Brush.verticalGradient(listOf(Color(0xFF1960B4), Color(0xFF0B326B))))
+            .statusBarsPadding().navigationBarsPadding().padding(24.dp),
         verticalArrangement = Arrangement.SpaceBetween,
     ) {
         Column {
@@ -131,7 +180,7 @@ fun WelcomeScreen(nav: NavHostController) {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("A smarter way to stay connected with your school.", color = Color.White, fontSize = 23.sp, fontWeight = FontWeight.SemiBold)
             Button(
-                onClick = { nav.navigate("home") { popUpTo("welcome") { inclusive = true } } },
+                onClick = { nav.navigate("home") { popUpTo(nav.graph.id) { inclusive = true } } },
                 modifier = Modifier.fillMaxWidth(),
                 colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Blue),
             ) { Text("Explore as Guest") }
@@ -148,66 +197,67 @@ fun WelcomeScreen(nav: NavHostController) {
 
 // ───────────── home ─────────────
 
-data class Tile(val title: String, val subtitle: String, val route: String)
+data class Tile(val title: String, val subtitle: String, val route: String, val icon: ImageVector = Icons.Default.ArrowForward)
 
 private fun exploreTiles(role: String): List<Tile> = listOf(
-    Tile("Notices", "Official announcements", "list/notices"),
-    Tile("Result Search", "Find a published result", "results"),
-    Tile("Academic Calendar", "Dates and events", "list/calendar"),
-    if (role == "student") Tile("Class Routine", "Your weekly timetable", "list/routine?arg=me")
-    else Tile("Class Routine", "Pick a class", "list/routine_classes"),
-    if (role == "student") Tile("Exam Routine", "Your upcoming exams", "list/exam_routine?arg=me")
-    else Tile("Exam Routine", "Upcoming exams", "list/exam_routine"),
-    Tile("Gallery", "School photos", "list/gallery"),
-    Tile("Admission", "Information and application", "list/admission"),
-    Tile("Teacher Directory", "Find teaching staff", "list/teachers"),
-    Tile("About School", "School information", "list/about"),
+    Tile("Notices", "Official announcements", "list/notices", Icons.Default.Campaign),
+    Tile("Result Search", "Find a published result", "results", Icons.Default.Search),
+    Tile("Academic Calendar", "Dates and events", "list/calendar", Icons.Default.DateRange),
+    if (role == "student") Tile("Class Routine", "Your weekly timetable", "list/routine?arg=me", Icons.Default.DateRange)
+    else Tile("Class Routine", "Pick a class", "list/routine_classes", Icons.Default.DateRange),
+    if (role == "student") Tile("Exam Routine", "Your upcoming exams", "list/exam_routine?arg=me", Icons.Default.Edit)
+    else Tile("Exam Routine", "Upcoming exams", "list/exam_routine", Icons.Default.Edit),
+    Tile("Gallery", "School photos", "list/gallery", Icons.Default.Favorite),
+    Tile("Admission", "Information and application", "list/admission", Icons.Default.School),
+    Tile("Teacher Directory", "Find teaching staff", "list/teachers", Icons.Default.Person),
+    Tile("About School", "School information", "list/about", Icons.Default.Info),
 )
 
 private fun roleTiles(role: String): List<Tile> = when (role) {
     "student" -> listOf(
-        Tile("My Attendance", "Present, absent, late", "list/attendance"),
-        Tile("My Results", "Published results", "list/results_my"),
-        Tile("Assignments", "Homework and submissions", "list/assignments"),
-        Tile("Study Materials", "Notes and resources", "list/materials"),
-        Tile("Community", "Class channels", "list/channels"),
+        Tile("My Attendance", "Present, absent, late", "list/attendance", Icons.Default.Check),
+        Tile("My Results", "Published results", "list/results_my", Icons.Default.Star),
+        Tile("Assignments", "Homework and submissions", "list/assignments", Icons.Default.Edit),
+        Tile("Study Materials", "Notes and resources", "list/materials", Icons.Default.Info),
+        Tile("Community", "Class channels", "list/channels", Icons.Default.Groups),
     )
     "parent" -> listOf(
-        Tile("My Children", "Attendance, results, homework", "list/children"),
-        Tile("Link a Child", "Send a verification request", "list/my_links"),
-        Tile("Study Materials", "Resources for the class", "list/materials"),
-        Tile("Community", "Class channels (read only)", "list/channels"),
+        Tile("My Children", "Attendance, results, homework", "list/children", Icons.Default.Person),
+        Tile("Link a Child", "Send a verification request", "list/my_links", Icons.Default.Add),
+        Tile("Study Materials", "Resources for the class", "list/materials", Icons.Default.Info),
+        Tile("Community", "Class channels (read only)", "list/channels", Icons.Default.Groups),
     )
     "teacher" -> listOf(
-        Tile("My Classes", "Assigned classes and rosters", "list/my_classes"),
-        Tile("Mark Attendance", "Record today's attendance", "attendance_mark"),
-        Tile("Create Assignment", "Set homework", "form/create_assignment"),
-        Tile("Assignments & Reviews", "See submissions", "list/assignments"),
-        Tile("Study Materials", "Shared resources", "list/materials"),
-        Tile("Community", "Class channels", "list/channels"),
-        Tile("Moderation", "Reported messages", "list/moderation"),
+        Tile("My Classes", "Assigned classes and rosters", "list/my_classes", Icons.Default.School),
+        Tile("Mark Attendance", "Record today's attendance", "attendance_mark", Icons.Default.Check),
+        Tile("Create Assignment", "Set homework", "form/create_assignment", Icons.Default.Add),
+        Tile("Assignments & Reviews", "See submissions", "list/assignments", Icons.Default.Edit),
+        Tile("Study Materials", "Shared resources", "list/materials", Icons.Default.Info),
+        Tile("Community", "Class channels", "list/channels", Icons.Default.Groups),
+        Tile("Moderation", "Reported messages", "list/moderation", Icons.Default.Lock),
     )
     "admin" -> listOf(
-        Tile("Dashboard", "School overview", "list/admin_stats"),
-        Tile("Pending Parent Links", "Approve or reject", "list/admin_links"),
-        Tile("Users", "Roles and accounts", "list/admin_users"),
-        Tile("Admission Applications", "Review applicants", "list/admin_apps"),
-        Tile("Post a Notice", "Publish an announcement", "form/notice"),
-        Tile("Community", "Channels", "list/channels"),
-        Tile("Moderation", "Reported messages", "list/moderation"),
+        Tile("Dashboard", "School overview", "list/admin_stats", Icons.Default.Home),
+        Tile("Pending Parent Links", "Approve or reject", "list/admin_links", Icons.Default.Check),
+        Tile("Users", "Roles and accounts", "list/admin_users", Icons.Default.Person),
+        Tile("Admission Applications", "Review applicants", "list/admin_apps", Icons.Default.School),
+        Tile("Post a Notice", "Publish an announcement", "form/notice", Icons.Default.Campaign),
+        Tile("Community", "Channels", "list/channels", Icons.Default.Groups),
+        Tile("Moderation", "Reported messages", "list/moderation", Icons.Default.Lock),
     )
     else -> emptyList()
 }
 
 @Composable
-fun MenuCard(title: String, subtitle: String, onClick: () -> Unit) {
+fun MenuCard(title: String, subtitle: String, icon: ImageVector = Icons.Default.ArrowForward, onClick: () -> Unit) {
     Card(
-        Modifier.fillMaxWidth().clickable(onClick = onClick), shape = RoundedCornerShape(16.dp),
+        Modifier.fillMaxWidth().clickable(onClick = onClick), shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(42.dp).background(Color(0xFFE8F0FB), CircleShape), contentAlignment = Alignment.Center) {
-                Icon(Icons.Default.ArrowForward, null, tint = Blue)
+            Box(Modifier.size(42.dp).background(MaterialTheme.colorScheme.primary.copy(alpha = .12f), CircleShape), contentAlignment = Alignment.Center) {
+                Icon(icon, null, tint = MaterialTheme.colorScheme.primary)
             }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
@@ -223,7 +273,7 @@ fun MenuCard(title: String, subtitle: String, onClick: () -> Unit) {
 fun MenuPage(nav: NavHostController, title: String, section: String, tiles: List<Tile>) {
     Scaffold(topBar = { Header(title, section) { nav.popBackStack() } }, containerColor = MaterialTheme.colorScheme.background) { p ->
         LazyColumn(Modifier.fillMaxSize().padding(p).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            items(tiles) { t -> MenuCard(t.title, t.subtitle, onClick = { nav.navigate(t.route) }) }
+            items(tiles) { t -> MenuCard(t.title, t.subtitle, t.icon, onClick = { nav.navigate(t.route) }) }
         }
     }
 }
@@ -325,10 +375,10 @@ fun HomeScreen(nav: NavHostController) {
             val mine = roleTiles(role)
             if (mine.isNotEmpty()) {
                 item { Text("Your tools", fontSize = 17.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp)) }
-                items(mine) { t -> MenuCard(t.title, t.subtitle, onClick = { nav.navigate(t.route) }) }
+                items(mine) { t -> MenuCard(t.title, t.subtitle, t.icon, onClick = { nav.navigate(t.route) }) }
             }
             item { Text("Explore", fontSize = 17.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp)) }
-            items(exploreTiles(role)) { t -> MenuCard(t.title, t.subtitle, onClick = { nav.navigate(t.route) }) }
+            items(exploreTiles(role)) { t -> MenuCard(t.title, t.subtitle, t.icon, onClick = { nav.navigate(t.route) }) }
             item { Spacer(Modifier.height(16.dp)) }
         }
     }
@@ -376,7 +426,7 @@ fun ProfileScreen(nav: NavHostController) {
                 OutlinedButton(
                     onClick = {
                         Session.clear()
-                        nav.navigate("welcome") { popUpTo("home") { inclusive = true } }
+                        nav.navigate("welcome") { popUpTo(nav.graph.id) { inclusive = true } }
                     },
                     modifier = Modifier.fillMaxWidth(),
                 ) { Text("Sign out") }
@@ -433,7 +483,7 @@ fun SettingsScreen(nav: NavHostController) {
                             } catch (e: Exception) {
                             }
                             Session.clear()
-                            nav.navigate("welcome") { popUpTo("home") { inclusive = true } }
+                            nav.navigate("welcome") { popUpTo(nav.graph.id) { inclusive = true } }
                         }
                     },
                 ) { Text("Sign out of all devices") }

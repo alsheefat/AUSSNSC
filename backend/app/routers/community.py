@@ -8,8 +8,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..db import SessionLocal, get_db
-from ..deps import (approved_child_ids, audit, current_user, get_or_404, student_profile_of,
-                    teacher_class_ids, user_from_token)
+from ..deps import (audit, current_user, get_or_404, teacher_class_ids, user_from_token,
+                    visible_class_ids)
 from ..models import (Channel, ChannelRestriction, Message, MessageReport, StudentProfile, User)
 from ..schemas import (ChannelOut, MessageIn, MessageOut, Msg, ReportIn, ReportOut, RestrictionIn)
 from ..security import limiter
@@ -20,43 +20,40 @@ router = APIRouter(tags=["Community"])
 
 # ───────────── permissions ─────────────
 
-def _can_read(db: Session, user: User, ch: Channel) -> bool:
+def _readable(user: User, ch: Channel, visible: set[int] | None) -> bool:
+    """`visible` = classes the user may read (None = every class, i.e. admin)."""
     if user.role == "admin":
         return True
     if user.role == "public":
         return False
     if ch.class_id is None:                       # school-wide channel
         return True
-    if user.role == "teacher":
-        return ch.class_id in teacher_class_ids(db, user)
-    if user.role == "student":
-        sp = student_profile_of(db, user)
-        return bool(sp and sp.class_id == ch.class_id)
-    if user.role == "parent":
-        ids = approved_child_ids(db, user)
-        return bool(ids) and ch.class_id in set(db.scalars(
-            select(StudentProfile.class_id).where(StudentProfile.id.in_(ids))))
-    return False
+    return visible is not None and ch.class_id in visible
+
+
+def _can_read(db: Session, user: User, ch: Channel) -> bool:
+    return _readable(user, ch, visible_class_ids(db, user))
+
+
+def _is_restricted(r: ChannelRestriction | None) -> bool:
+    return bool(r and (r.until is None or r.until >= utcnow()))
 
 
 def _restricted(db: Session, user: User, ch: Channel) -> bool:
     r = db.scalar(select(ChannelRestriction).where(ChannelRestriction.channel_id == ch.id,
                                                    ChannelRestriction.user_id == user.id))
-    if not r:
+    return _is_restricted(r)
+
+
+def _postable(user: User, ch: Channel, readable: bool, restricted: bool) -> bool:
+    if not readable or user.role == "parent" or restricted:
         return False
-    if r.until and r.until < utcnow():
-        db.delete(r)
-        db.commit()
-        return False
-    return True
+    return not (ch.announcement_only and user.role not in ("teacher", "admin"))
 
 
 def _can_post(db: Session, user: User, ch: Channel) -> bool:
-    if not _can_read(db, user, ch) or user.role == "parent":
-        return False
-    if ch.announcement_only and user.role not in ("teacher", "admin"):
-        return False
-    return not _restricted(db, user, ch)
+    readable = _can_read(db, user, ch)
+    return _postable(user, ch, readable, readable and _restricted(db, user, ch))
 
 
 def _can_moderate(db: Session, user: User, ch: Channel) -> bool:
@@ -113,11 +110,16 @@ def _post(db: Session, user: User, ch: Channel, body: str) -> Message:
 
 @router.get("/channels", response_model=list[ChannelOut])
 def my_channels(user: User = Depends(current_user), db: Session = Depends(get_db)):
+    if user.role == "public":
+        return []
+    visible = visible_class_ids(db, user)                       # one query, not one per channel
+    restricted = {r.channel_id: r for r in db.scalars(
+        select(ChannelRestriction).where(ChannelRestriction.user_id == user.id))}
     out = []
     for ch in db.scalars(select(Channel).order_by(Channel.class_id, Channel.id)).unique():
-        if _can_read(db, user, ch):
+        if _readable(user, ch, visible):
             item = ChannelOut.model_validate(ch)
-            item.can_post = _can_post(db, user, ch)
+            item.can_post = _postable(user, ch, True, _is_restricted(restricted.get(ch.id)))
             out.append(item)
     return out
 
@@ -182,7 +184,7 @@ def _moderator_channel_ids(db: Session, user: User) -> list[int] | None:
     if user.role != "teacher":
         raise HTTPException(403, "Moderation is for teachers and admins")
     cls = teacher_class_ids(db, user)
-    return list(db.scalars(select(Channel.id).where(Channel.class_id.in_(cls or {-1}))))
+    return list(db.scalars(select(Channel.id).where(Channel.class_id.in_(list(cls) or [-1]))))
 
 
 @router.get("/moderation/reports", response_model=list[ReportOut])

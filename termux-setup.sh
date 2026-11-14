@@ -23,7 +23,7 @@ REPO=${REPO:-aussnsc}
 read -r -p "Render server URL (e.g. https://aussnsc-api.onrender.com) - press Enter if not deployed yet: " RURL
 if [ -n "$RURL" ]; then
   RURL=${RURL%/}
-  sed -i "s|^API_BASE_URL=.*|API_BASE_URL=${RURL}/api/v1/|" android/gradle.properties
+  echo "API_BASE_URL=${RURL}/api/v1/" > android/api.properties
 fi
 
 # Firebase config: look next to the app, then in Downloads

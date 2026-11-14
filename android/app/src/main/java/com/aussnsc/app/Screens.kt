@@ -31,6 +31,9 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.NavHostController
 import coil.compose.AsyncImage
 import kotlinx.coroutines.delay
@@ -99,7 +102,11 @@ fun EntryCard(e: Entry, onClick: (() -> Unit)?) {
     val mod = if (onClick != null) base.clickable(onClick = onClick)
     else if (e.body.isNotBlank()) base.clickable { expanded = !expanded }
     else base
-    Card(mod, shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+    Card(
+        mod, shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+    ) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(e.title, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
@@ -172,6 +179,7 @@ fun ListPage(nav: NavHostController, key: String, arg: String) {
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item { Text(spec.description, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            if (loading && entries.isNotEmpty()) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
             if (spec.searchable) {
                 item {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -185,7 +193,7 @@ fun ListPage(nav: NavHostController, key: String, arg: String) {
             }
             if (needLogin) {
                 item { LoginPrompt(nav) }
-            } else if (loading) {
+            } else if (loading && entries.isEmpty()) {
                 item { Loading("Loading... (the free server may need up to a minute to wake up)") }
             } else if (err != null) {
                 item { ErrorCard(err) { reload++ } }
@@ -363,7 +371,7 @@ fun AuthScreen(nav: NavHostController, register: Boolean) {
 
     fun finish() {
         nav.navigate("home") {
-            popUpTo("welcome") { inclusive = true }
+            popUpTo(nav.graph.id) { inclusive = true }
             launchSingleTop = true
         }
     }
@@ -470,8 +478,9 @@ fun ResultScreen(nav: NavHostController) {
                             enabled = !busy,
                             modifier = Modifier.fillMaxWidth().height(50.dp),
                             onClick = {
-                                val v = value.trim()
-                                val isRoll = v.isNotEmpty() && v.all { it.isDigit() }
+                                // accept Bengali digits too (১২৫ -> 125)
+                                val v = value.trim().map { if (it.isDigit()) Character.digit(it, 10).toString() else it.toString() }.joinToString("")
+                                val isRoll = v.isNotEmpty() && v.all { it in '0'..'9' }
                                 if (v.isBlank()) {
                                     error = "Enter a student name or roll number."
                                 } else if (!isRoll && v.length < 3) {
@@ -589,9 +598,15 @@ fun ChatScreen(nav: NavHostController, id: Int) {
             }
         } catch (e: Exception) {
         }
-        while (true) {
-            fetch()
-            delay(4000)
+    }
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+    LaunchedEffect(id, lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (true) {
+                fetch()
+                delay(5000)
+            }
         }
     }
 
@@ -643,7 +658,10 @@ fun ChatScreen(nav: NavHostController, id: Int) {
                 val mine = m.optInt("user_id", -2) == me
                 Card(
                     Modifier.fillMaxWidth().clickable { selected = m }, shape = RoundedCornerShape(14.dp),
-                    colors = CardDefaults.cardColors(containerColor = if (mine) Color(0xFFDCEBFB) else MaterialTheme.colorScheme.surface),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (mine) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+                        contentColor = if (mine) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+                    ),
                 ) {
                     Column(Modifier.padding(12.dp)) {
                         Text(

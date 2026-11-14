@@ -105,3 +105,16 @@ def test_upload_rules(client, student):
     assert client.get(ok.json()["url"]).status_code == 200
     bad = client.post(f"{API}/uploads", files={"file": ("evil.html", b"<script>", "text/html")}, headers=student)
     assert bad.status_code == 400
+
+
+def test_google_login_needs_server_config_and_valid_token(client):
+    # FIREBASE_PROJECT_ID is not set in the test environment
+    r = client.post(f"{API}/auth/google", json={"id_token": "x" * 40})
+    assert r.status_code == 503
+
+
+def test_channel_list_is_role_filtered(client, student, admin):
+    s = client.get(f"{API}/channels", headers=student).json()
+    a = client.get(f"{API}/channels", headers=admin).json()
+    assert 0 < len(s) < len(a)                          # admin sees every class, the student only their own
+    assert len({c["class_id"] for c in s} - {None}) == 1  # school-wide channels + exactly one class

@@ -11,6 +11,8 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.tls.HandshakeCertificates
+import okhttp3.tls.decodeCertificatePem
 import org.json.JSONArray
 import org.json.JSONObject
 import org.json.JSONTokener
@@ -86,11 +88,35 @@ object Session {
 object Api {
     private val base: String = BuildConfig.API_BASE_URL.trimEnd('/')
     private val JSON = "application/json; charset=utf-8".toMediaType()
-    private val client: OkHttpClient = OkHttpClient.Builder()
+    private fun baseBuilder(): OkHttpClient.Builder = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(75, TimeUnit.SECONDS)   // free Render servers can take ~1 minute to wake up
         .writeTimeout(30, TimeUnit.SECONDS)
-        .build()
+
+    @Volatile
+    private var client: OkHttpClient = baseBuilder().build()
+
+    /** Shared with the image loader so pictures use the same TLS settings. */
+    val httpClient: OkHttpClient get() = client
+
+    /**
+     * Android 7.0 and older do not know the newer public root certificates (ISRG Root X1 / X2,
+     * Google Trust Services), so HTTPS to modern servers fails there. We add those roots on top of
+     * the phone's own list. Any failure here just keeps the default client.
+     */
+    fun init(context: Context) {
+        try {
+            val builder = HandshakeCertificates.Builder().addPlatformTrustedCertificates()
+            for (id in intArrayOf(R.raw.isrg_root_x1, R.raw.isrg_root_x2, R.raw.gts_root_r1, R.raw.gts_root_r4)) {
+                val pem = context.resources.openRawResource(id).bufferedReader().use { it.readText() }
+                builder.addTrustedCertificate(pem.decodeCertificatePem())
+            }
+            val certs = builder.build()
+            client = baseBuilder().sslSocketFactory(certs.sslSocketFactory(), certs.trustManager).build()
+        } catch (e: Exception) {
+            client = baseBuilder().build()
+        }
+    }
 
     /** "https://x.onrender.com/uploads/a.pdf" from "/uploads/a.pdf" */
     fun fileUrl(path: String): String =
@@ -99,11 +125,13 @@ object Api {
     private fun send(method: String, path: String, body: JSONObject?, token: String?): Pair<Int, String> {
         val needsBody = method == "POST" || method == "PUT" || method == "PATCH"
         val requestBody = if (needsBody) (body ?: JSONObject()).toString().toRequestBody(JSON) else null
-        val builder = Request.Builder().url(base + path).header("Accept", "application/json")
-        if (token != null) builder.header("Authorization", "Bearer $token")
-        builder.method(method, requestBody)
         val result: Pair<Int, String> = try {
+            val builder = Request.Builder().url(base + path).header("Accept", "application/json")
+            if (token != null) builder.header("Authorization", "Bearer $token")
+            builder.method(method, requestBody)
             client.newCall(builder.build()).execute().use { resp -> Pair(resp.code, resp.body?.string() ?: "") }
+        } catch (e: IllegalArgumentException) {
+            throw ApiException("The server address in this app is not valid. Please reinstall the latest version.")
         } catch (e: IOException) {
             throw ApiException("Can't reach the server. Check your internet connection. (The free server may take up to a minute to wake up - please try again.)")
         }

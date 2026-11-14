@@ -1,6 +1,6 @@
 from datetime import date, datetime, time
 
-from sqlalchemy import (Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text, Time,
+from sqlalchemy import (Boolean, Date, DateTime, Float, ForeignKey, Index, Integer, String, Text, Time,
                         UniqueConstraint)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -326,6 +326,7 @@ class Channel(Base):
 
 class Message(Base):
     __tablename__ = "messages"
+    __table_args__ = (Index("ix_messages_channel_id_id", "channel_id", "id"),)
     id: Mapped[int] = mapped_column(primary_key=True)
     channel_id: Mapped[int] = mapped_column(ForeignKey("channels.id", ondelete="CASCADE"), index=True)
     user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))

@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -27,6 +28,7 @@ app = FastAPI(title="AUSSNSC School API", version="1.0.0", lifespan=lifespan,
               docs_url="/docs" if settings.enable_docs else None,
               redoc_url=None)
 
+app.add_middleware(GZipMiddleware, minimum_size=1024)
 app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_methods=["*"],
                    allow_headers=["*"], allow_credentials=False)
 

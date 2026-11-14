@@ -111,5 +111,5 @@ def visible_class_ids(db: Session, user: User) -> set[int] | None:
         ids = approved_child_ids(db, user)
         if not ids:
             return set()
-        return set(db.scalars(select(StudentProfile.class_id).where(StudentProfile.id.in_(ids))))
+        return set(db.scalars(select(StudentProfile.class_id).where(StudentProfile.id.in_(list(ids)))))
     return set()
